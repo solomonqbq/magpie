@@ -4,17 +4,31 @@ import (
 	"log"
 	"math/rand"
 	"strconv"
-	"time"
 )
 
-func NewMockBoard() *Board {
-	b := NewBoard()
+func NewMockBoard() *Worker {
+	b := NewWorker()
+
 	b.Init = func() error {
 		log.Printf("init")
+		b.Id = "qbq"
 		return nil
 	}
-	b.HeartBeat = func() {
-		log.Println("heart beat")
+
+	b.SelectLeader = func(group string) bool {
+		return true
+	}
+
+	b.DispatchTasks = func(workerIds []string, tasks []*Task) error {
+		log.Printf("开始DispatchTasks")
+		for _, id := range workerIds {
+			log.Printf("组员%s", id)
+		}
+		for _, t := range tasks {
+			log.Printf("任务%s", t.Name)
+		}
+		log.Printf("DispatchTasks完毕")
+		return nil
 	}
 
 	b.LoadAllGroup = func() (groups []string, err error) {
@@ -22,13 +36,13 @@ func NewMockBoard() *Board {
 		groups = append(groups, "test_group")
 		return
 	}
-	b.LoadActiveMembers = func(group string) (mems []*MemID, err error) {
-		m := new(MemID)
-		m.Id = "1"
-		m.Group = "test_group"
-		mems = append(mems, m)
-		return mems, nil
+
+	b.LoadActiveWorkers = func(group string) (ids []string, err error) {
+		ids = make([]string, 0)
+		ids = append(ids, "1")
+		return
 	}
+
 	b.LoadTasks = func(group string) (tasks []*Task, err error) {
 		tasks = make([]*Task, 0)
 		c := rand.Intn(10)
@@ -39,40 +53,17 @@ func NewMockBoard() *Board {
 		log.Printf("memMockBoard LoadTasks finished")
 		return
 	}
-	b.SelectLeader = func(group string) bool {
-		return true
+
+	b.HeartBeat = func() {
+		log.Println("heart beat")
 	}
-	b.DispatchTasks = func(mems []*MemID, tasks []*Task) {
-		log.Printf("开始DispatchTasks")
-		for _, m := range mems {
-			log.Printf("组员%s", m.Id)
-		}
-		for _, t := range tasks {
-			log.Printf("组员%s", t.Name)
-		}
-		log.Printf("DispatchTasks完毕")
-		//		b.NewTasks = make(map[string][]*Task, 0)
-	}
+
 	b.Cleanup = func(group string) {
-		log.Println("nothing to do")
+		log.Println("clean up done")
 		return
 	}
+	b.TakeTasks = func() {
+		log.Printf("%s的worker领取任务...", b.Id)
+	}
 	return b
-}
-
-func NewMockMember(b *Board, group string) *Member {
-	m := NewMember(b, group)
-	m.HeartBeat_interval = 3 * time.Second
-	m.ReportTasksStaus = func() error {
-		log.Printf("%s上报任务状态", m.Id)
-		return nil
-	}
-	m.HeartBeat = func() {
-		log.Printf("%s发送心跳", m.Id)
-	}
-	m.Regist = func() (id string, err error) {
-		return "1", nil
-	}
-	m.Start()
-	return m
 }

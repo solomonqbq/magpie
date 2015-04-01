@@ -9,6 +9,7 @@ import (
 	"github.com/xeniumd-china/magpie/core"
 	"github.com/xeniumd-china/magpie/db/model"
 	"github.com/xeniumd-china/magpie/global"
+	"strconv"
 	"time"
 )
 
@@ -21,20 +22,102 @@ const (
 )
 
 const (
-	QUERY_ACTIVE_MEMBERS         = "SELECT `id`, `group` FROM `mp_member` WHERE `group`=? and `time_out`>= now()"
-	QUERY_ALL_GROUP              = "SELECT `group` FROM `mp_group`"
-	QUERY_TASKS                  = "SELECT `id`, `name`, `group`, `mem_id`, `status`,`run_type`,`interval` FROM `mp_task` WHERE `group` = ? and status in (?)"
-	DELETE_TIME_OUT_BOARD        = "DELETE FROM `mp_board` WHERE `time_out` < now()"
-	DELETE_TIME_OUT_MEMBER       = "DELETE FROM `mp_member` WHERE id in (?)"
-	QUERY_TIME_OUT_MEMBER        = "SELECT `id` from `mp_member` where `time_out` < now()"
-	UPDATE_TASK_STATUS_BY_MEM_ID = "UPDATE `mp_task` set `status`= ? where mem_id = ?"
-	UPDATE_BOARD_TIME_OUT        = "UPDATE `mp_board` SET `time_out`=DATE_ADD(now(),INTERVAL ? SECOND) WHERE id = ?"
-	INSERT_BOARD                 = "INSERT INTO `mp_board`(`name`, `created_time`, `time_out`) VALUES (?,?,DATE_ADD(now(),INTERVAL ? SECOND))"
-	UPDATE_BORAD_GROUP           = "UPDATE `mp_board_group` SET group = ? and board_id = ? and `time_out`= DATE_ADD(now(),INTERVAL ? SECOND)) WHERE (group=? and board_id=?) or (`time_out` < now())"
+	DELETE_TIME_OUT_WORKER_BY_ID = "DELETE FROM `mp_worker` WHERE `id` = ?"
+
+	INSERT_WORKER = "INSERT INTO `mp_worker`(`name`, `created_time`, `time_out`) VALUES (?,?,DATE_ADD(now(),INTERVAL ? SECOND))"
+
+	QUERY_ACTIVE_WORKERS   = "SELECT `id` FROM `mp_worker` WHERE `time_out`>= now()"
+	QUERY_ALL_GROUP        = "SELECT `group` FROM `mp_group`"
+	QUERY_TASKS            = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval` FROM `mp_task` WHERE `group` = '%s' and `status` in (%s)"
+	QUERY_TIME_OUT_WORKER  = "SELECT `id` FROM `mp_worker` WHERE `time_out` < now()"
+	QUERY_DISPATCHED_TASKS = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval` FROM `mp_task` WHERE `status`=1 and `worker_id`=?"
+	QUERY_ACTIVE_TASKS     = "SELECT count(`id`),`worker_id` from `mp_task` where `status` = 1 or `status` = 2 group by `worker_id`"
+
+	UPDATE_WORKER_GROUP          = "UPDATE `mp_worker_group` SET `group` = ? , `worker_id` = ? , `time_out`= DATE_ADD(now(),INTERVAL ? SECOND) WHERE (`group`=? and `worker_id`=?) or (`time_out` < now())"
+	UPDATE_WORKER_TIME_OUT       = "UPDATE `mp_worker` SET `time_out`=DATE_ADD(now(),INTERVAL ? SECOND) WHERE id = ?"
+	UPDATE_TASK_OWNER            = "UPDATE `mp_task` set `status` = 1,`worker_id`=%d where `id` in (%s)"
+	UPDATE_TASK_STATUS_BY_WORKER = "UPDATE `mp_task` set `status` = ? where `worker_id` = ?"
+	UPDATE_TASK_STATUS_BY_ID     = "UPDATE `mp_task` set `status` = ? where `id` = ?"
 )
 
-func InsertBoard(name string, time_out_interval time.Duration) (id int64, err error) {
-	result, err := dataSource.Exec(INSERT_BOARD, global.NowStr(), time_out_interval.Second())
+func UpdateTaskStatus(id int, status int) error {
+	_, err := dataSource.Exec(UPDATE_TASK_STATUS_BY_ID, status, id)
+	return err
+}
+
+func QueryDispatchedTasksByWorker(worker_id string) (tasks []*model.Mp_task, err error) {
+	rows, err := dataSource.Query(QUERY_DISPATCHED_TASKS, worker_id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		t := new(model.Mp_task)
+		err = rows.Scan(&t.Id, &t.Name, &t.Group, &t.Worker_id, &t.Status, &t.Run_type, &t.Interval)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return
+}
+
+func DispathTask(wts []*WorkerTask) error {
+	tx, err := dataSource.Begin()
+	if err != nil {
+		return err
+	}
+	for _, wt := range wts {
+		var task_id_param string = ""
+		for i, tid := range wt.new_task_id {
+			if i != 0 {
+				task_id_param = "," + task_id_param
+			}
+			task_id_param = task_id_param + strconv.FormatInt(tid, 10)
+		}
+
+		result, err := tx.Exec(fmt.Sprintf(UPDATE_TASK_OWNER, wt.id, task_id_param))
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected != int64(len(wt.new_task_id)) {
+			tx.Rollback()
+			return errors.New(fmt.Sprintf("任务分配出错！期待分配给worker_id：%d的任务数是%d,实际分配了%d条，回滚...", wt.id, len(wt.new_task_id), affected))
+		}
+	}
+	tx.Commit()
+	return nil
+}
+
+func QueryActiveTasks() (workerIds []int64, taskCount []int64, err error) {
+	rows, err := dataSource.Query(QUERY_ACTIVE_TASKS)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	workerIds = make([]int64, 0)
+	taskCount = make([]int64, 0)
+	for rows.Next() {
+		var count int64
+		var workerId int64
+		err = rows.Scan(&count, &workerId)
+		if err != nil {
+			return nil, nil, err
+		}
+		workerIds = append(workerIds, workerId)
+		taskCount = append(taskCount, count)
+	}
+	return
+
+}
+
+func InsertWorker(name string, time_out_interval time.Duration) (id int64, err error) {
+	result, err := dataSource.Exec(INSERT_WORKER, name, global.NowStr(), time_out_interval/time.Second)
 	if err != nil {
 		return -1, err
 	}
@@ -45,8 +128,8 @@ func InsertBoard(name string, time_out_interval time.Duration) (id int64, err er
 	return
 }
 
-func UpdateBoardGroup(group string, board_id int64, time_out_interval time.Duartion) (affact int64, err error) {
-	result, err := dataSource.Exec(UPDATE_BORAD_GROUP, group, board_id, time_out_interval.Second(), group, board_id)
+func UpdateWorkerGroup(group string, worker_id int64, time_out_interval time.Duration) (affact int64, err error) {
+	result, err := dataSource.Exec(UPDATE_WORKER_GROUP, group, worker_id, time_out_interval/time.Second, group, worker_id)
 	if err != nil {
 		return 0, err
 	}
@@ -54,41 +137,59 @@ func UpdateBoardGroup(group string, board_id int64, time_out_interval time.Duart
 	return
 }
 
-func UpdateBoardTimeout(id int64, interval time.Duration) error {
-	_, err = dataSource.Exec(UPDATE_BOARD_TIME_OUT, interval.Second(), id)
+func UpdateWorkerTimeout(id int64, interval time.Duration) error {
+	_, err := dataSource.Exec(UPDATE_WORKER_TIME_OUT, interval/time.Second, id)
+	return err
+}
+
+func QueryTimeoutWorker() (workersId []int64, err error) {
+	workersId = make([]int64, 0)
+	rows, err := dataSource.Query(QUERY_TIME_OUT_WORKER)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		rows.Scan(&id)
+		if err != nil {
+			return
+		}
+		workersId = append(workersId, id)
+	}
+	if len(workersId) == 0 {
+		return
+	}
 	return
 }
 
-func DeleteTimeoutBoard() error {
-	_, err := dataSource.Exec(DELETE_TIME_OUT_BOARD)
-	return err
-}
-
-func DeleteTimeoutMember() error {
-	rows, err := dataSource.Query(QUERY_TIME_OUT_MEMBER)
+func DeleteTimeoutWorker(workersId []int64) (affected int64, err error) {
+	tx, err := dataSource.Begin()
 	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	ids := make([]uint64, 0)
-	for rows.Next() {
-		var id uint64
-		err = rows.Scan(&id)
-		if err != nil {
-			return err
-		}
-		ids = append(ids, id)
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	//将已死组员的任务变为可分配
-	for _, id := range ids {
-		dataSource.Exec(UPDATE_TASK_STATUS_BY_MEM_ID, core.TASK_FAIL, id)
+		return 0, err
 	}
 
-	_, err = dataSource.Exec(DELETE_TIME_OUT_MEMBER, ids)
-	return err
+	for _, wid := range workersId {
+		_, err := tx.Exec(UPDATE_TASK_STATUS_BY_WORKER, core.TASK_FAIL, wid)
+		if err != nil {
+			tx.Rollback()
+			return 0, err
+		}
+		result, err := tx.Exec(DELETE_TIME_OUT_WORKER_BY_ID, wid)
+		if err != nil {
+			tx.Rollback()
+			return 0, err
+		}
+		a, err := result.RowsAffected()
+		if err != nil {
+			tx.Rollback()
+			return 0, err
+		}
+		affected = affected + a
+	}
+
+	tx.Commit()
+	return
 }
 
 func InitAllDS(prop properties.Properties) {
@@ -140,15 +241,23 @@ func InitDS(dsKey DataSource_KEY, url string, maxIdle int, maxOpen int) (err err
 }
 
 func queryTasksByStatus(group string, status []int) (tasks []*model.Mp_task, err error) {
-	rows, err := dataSource.Query(QUERY_TASKS, group, status)
+	var status_param string = ""
+	for i, s := range status {
+		if i != 0 {
+			status_param = status_param + ","
+		}
+		status_param = status_param + strconv.Itoa(s)
+	}
+	rows, err := dataSource.Query(fmt.Sprintf(QUERY_TASKS, group, status_param))
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 	defer rows.Close()
 	tasks = make([]*model.Mp_task, 0)
 	for rows.Next() {
 		t := new(model.Mp_task)
-		err = rows.Scan(&t.Id, &t.Name, &t.Group, &t.Mem_id, &t.Status, &t.Run_type, &t.Interval)
+		err = rows.Scan(&t.Id, &t.Name, &t.Group, &t.Worker_id, &t.Status, &t.Run_type, &t.Interval)
 		if err != nil {
 			return nil, err
 		}
@@ -182,65 +291,20 @@ func QueryAllGroup() (groups []string, err error) {
 }
 
 //查询存活的组员
-func QueryActiveMembers(group string) (mp_members []*model.Mp_member, err error) {
-	result, err := dataSource.Query(QUERY_ACTIVE_MEMBERS, group)
+func QueryActiveWorkers() (workerIds []string, err error) {
+	rows, err := dataSource.Query(QUERY_ACTIVE_WORKERS)
 	if err != nil {
 		return nil, err
 	}
-	defer result.Close()
-	mp_members = make([]*model.Mp_member, 0)
-	for result.Next() {
-		m := new(model.Mp_member)
-		err = result.Scan(&m.Id, &m.Group)
+	defer rows.Close()
+	workerIds = make([]string, 0)
+	for rows.Next() {
+		var Id string
+		err = rows.Scan(&Id)
 		if err != nil {
 			return nil, err
 		}
-		mp_members = append(mp_members, m)
+		workerIds = append(workerIds, Id)
 	}
 	return
 }
-
-//
-////插入负载均衡实例
-//func InsertInstance(instance *model.Instance) error {
-//	stmt, err := dataSource.Prepare(INSERT_INSTANCE)
-//	if err != nil {
-//		return err
-//	}
-//	defer stmt.Close()
-//	if instance.Id == "" {
-//		return errors.New("负载均衡实例Id不能为空")
-//	}
-//	if instance.Name == "" {
-//		instance.Name = instance.Id
-//	}
-//	if instance.User_id == "" {
-//		return errors.New("用户ID不能为空！")
-//	}
-//	if instance.Vip == "" {
-//		return errors.New("VIP不能为空！")
-//	}
-//
-//	instance.Status = 1
-//	if instance.Max_conns == 0 {
-//		instance.Max_conns = 5000
-//	}
-//
-//	t := time.Now()
-//	instance.Created_time = t.Format(global.FORMAT_SECOND)
-//	instance.Updated_time = instance.Created_time
-//	instance.Partition_id = 1
-//	result, err := stmt.Exec(instance.Id, instance.Name, instance.User_id, instance.Vip, instance.Type, instance.Status, instance.Max_conns, instance.Created_time, instance.Updated_time, instance.Partition_id)
-//	if err != nil {
-//		return err
-//	}
-//	affected, err := result.RowsAffected()
-//	if err != nil {
-//		return err
-//	}
-//	if affected != 1 {
-//		return errors.New("未成功插入！")
-//	}
-//	InsertChangeLogByInstanceId(instance.Id)
-//	return err
-//}
