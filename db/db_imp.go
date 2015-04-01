@@ -148,7 +148,6 @@ func NewDBWorker() *core.Worker {
 			taskId, _ := strconv.Atoi(task.ID)
 			ltw.new_task_id = append(ltw.new_task_id, int64(taskId))
 		}
-
 		return DispathTask(wts)
 	}
 
@@ -179,7 +178,7 @@ func LeastTaskWorker(wts []*WorkerTask) *WorkerTask {
 		if tmp == nil {
 			tmp = wt
 		}
-		if (tmp.old_task_count + int64(len(tmp.new_task_id))) < (wt.old_task_count + int64(len(wt.new_task_id))) {
+		if (tmp.old_task_count + int64(len(tmp.new_task_id))) > (wt.old_task_count + int64(len(wt.new_task_id))) {
 			tmp = wt
 		}
 	}

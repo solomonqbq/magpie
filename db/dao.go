@@ -68,14 +68,17 @@ func DispathTask(wts []*WorkerTask) error {
 		return err
 	}
 	for _, wt := range wts {
+		if len(wt.new_task_id) == 0 {
+			continue
+		}
 		var task_id_param string = ""
 		for i, tid := range wt.new_task_id {
 			if i != 0 {
-				task_id_param = "," + task_id_param
+				task_id_param = task_id_param + ","
 			}
 			task_id_param = task_id_param + strconv.FormatInt(tid, 10)
 		}
-
+		fmt.Println(fmt.Sprintf(UPDATE_TASK_OWNER, wt.id, task_id_param))
 		result, err := tx.Exec(fmt.Sprintf(UPDATE_TASK_OWNER, wt.id, task_id_param))
 		if err != nil {
 			tx.Rollback()
