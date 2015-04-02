@@ -18,6 +18,7 @@ const (
 type Worker struct {
 	running           bool
 	Id                string                                             //ID
+	Group             string                                             //组
 	Executors         map[string]*Task_Executor                          //key是taskId
 	Init              func() error                                       //初始化方法
 	SelectLeader      func(group string) bool                            //选举组长
@@ -30,10 +31,11 @@ type Worker struct {
 	TakeTasks         func() (tasks []*Task, err error)                  //领任务
 }
 
-func NewWorker() *Worker {
+func NewWorker(group string) *Worker {
 	b := new(Worker)
 	b.running = false
 	b.Executors = make(map[string]*Task_Executor, 0)
+	b.Group = group
 	return b
 }
 

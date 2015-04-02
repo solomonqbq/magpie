@@ -51,7 +51,7 @@ func main() {
 		core.Registry(tn, NewMockTaskExecutor(tn))
 	}
 
-	w := db.NewDBWorker()
+	w := db.NewDBWorker("load_balance")
 	w.Start()
 	time.Sleep(1000 * time.Second)
 

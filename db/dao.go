@@ -24,9 +24,9 @@ const (
 const (
 	DELETE_TIME_OUT_WORKER_BY_ID = "DELETE FROM `mp_worker` WHERE `id` = ?"
 
-	INSERT_WORKER = "INSERT INTO `mp_worker`(`name`, `created_time`, `time_out`) VALUES (?,?,DATE_ADD(now(),INTERVAL ? SECOND))"
+	INSERT_WORKER = "INSERT INTO `mp_worker`(`name`, `created_time`, `time_out`,`group`) VALUES (?,?,DATE_ADD(now(),INTERVAL ? SECOND),?)"
 
-	QUERY_ACTIVE_WORKERS   = "SELECT `id` FROM `mp_worker` WHERE `time_out`>= now()"
+	QUERY_ACTIVE_WORKERS   = "SELECT `id` FROM `mp_worker` WHERE `time_out`>= now() and `group`=?"
 	QUERY_ALL_GROUP        = "SELECT `group` FROM `mp_group`"
 	QUERY_TASKS            = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval`,`context` FROM `mp_task` WHERE `group` = '%s' and `status` in (%s)"
 	QUERY_TIME_OUT_WORKER  = "SELECT `id` FROM `mp_worker` WHERE `time_out` < now()"
@@ -130,8 +130,8 @@ func QueryActiveTasks() (workerIds []int64, taskCount []int64, err error) {
 
 }
 
-func InsertWorker(name string, time_out_interval time.Duration) (id int64, err error) {
-	result, err := dataSource.Exec(INSERT_WORKER, name, global.NowStr(), time_out_interval/time.Second)
+func InsertWorker(name string, time_out_interval time.Duration, group string) (id int64, err error) {
+	result, err := dataSource.Exec(INSERT_WORKER, name, global.NowStr(), time_out_interval/time.Second, group)
 	if err != nil {
 		return -1, err
 	}
@@ -304,8 +304,8 @@ func QueryAllGroup() (groups []string, err error) {
 }
 
 //查询存活的组员
-func QueryActiveWorkers() (workerIds []string, err error) {
-	rows, err := dataSource.Query(QUERY_ACTIVE_WORKERS)
+func QueryActiveWorkers(group string) (workerIds []string, err error) {
+	rows, err := dataSource.Query(QUERY_ACTIVE_WORKERS, group)
 	if err != nil {
 		return nil, err
 	}

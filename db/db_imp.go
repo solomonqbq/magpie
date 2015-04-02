@@ -17,8 +17,8 @@ type WorkerTask struct {
 	new_task_id    []int64
 }
 
-func NewDBWorker() *core.Worker {
-	b := core.NewWorker()
+func NewDBWorker(group string) *core.Worker {
+	b := core.NewWorker(group)
 
 	b.Init = func() error {
 		//构造DB连接
@@ -33,7 +33,7 @@ func NewDBWorker() *core.Worker {
 			name = global.GetLocalIP()
 		}
 		log.Printf("准备注册worker")
-		id, err := InsertWorker(name, time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second)
+		id, err := InsertWorker(name, time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second, b.Group)
 		if err != nil {
 			log.Println(err)
 			return err
@@ -78,7 +78,7 @@ func NewDBWorker() *core.Worker {
 	}
 
 	b.LoadActiveWorkers = func(group string) (ids []string, err error) {
-		ids, err = QueryActiveWorkers()
+		ids, err = QueryActiveWorkers(group)
 		if err != nil {
 			return nil, err
 		}
