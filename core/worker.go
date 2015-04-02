@@ -2,8 +2,8 @@ package core
 
 import (
 	"errors"
+	l "github.com/xeniumd-china/flamingo/log"
 	"github.com/xeniumd-china/magpie/global"
-	"log"
 	"runtime/debug"
 	"time"
 )
@@ -13,6 +13,10 @@ type RUNNING_TYPE int //0:周期任务 1:一次性任务
 const (
 	//看板定时刷新频度
 	BOARD_REFRESH_INTERVAL = 5 * time.Second
+)
+
+var (
+	log = l.GetLogger("magpie")
 )
 
 type Worker struct {
@@ -85,14 +89,14 @@ func (b *Worker) Start() error {
 		for b.running {
 			tasks, err := b.TakeTasks()
 			if err != nil {
-				log.Println("领取任务出错！%s", err)
+				log.Error("领取任务出错！%s", err)
 				continue
 			} else {
 				//分配任务
 				for _, t := range tasks {
 					te := GetTaskExecutor(t.Name)
 					if te == nil {
-						log.Printf("不支持的任务:%s", t.Name)
+						log.Warn("不支持的任务:%s", t.Name)
 						t.UpdateStatus(TASK_FAIL, errors.New("任务节点不支持名为"+t.Name+"的任务！"))
 						continue
 					} else {
@@ -116,7 +120,7 @@ func (b *Worker) Start() error {
 								r := te.Execute()
 								err = te.Task.UpdateStatus(r.Result_code, r.Error)
 								if err != nil {
-									log.Printf("任务%s状态更新失败,错误:%s", te.Task.ID, err)
+									log.Error("任务%s状态更新失败,错误:%s", te.Task.ID, err)
 								}
 							}
 						})
@@ -134,7 +138,7 @@ func (b *Worker) Start() error {
 func (b *Worker) selectLeaderAndDispatch() {
 	groups, err := b.LoadAllGroup()
 	if err != nil {
-		log.Printf("获取分组信息出错！%s", err)
+		log.Error("获取分组信息出错！%s", err)
 		return
 	}
 	//分组抢锁
@@ -151,17 +155,17 @@ func (b *Worker) selectLeaderAndDispatch() {
 				//成为组长
 				ids, _ := b.LoadActiveWorkers(group)
 				for _, id := range ids {
-					log.Printf("active member Id:%s group:%s", id, group)
+					log.Debug("active member Id:%s group:%s", id, group)
 				}
 
 				tasks, _ := b.LoadTasks(group)
 				for _, t := range tasks {
-					log.Printf("active task Id:%s", t.ID)
+					log.Debug("active task Id:%s", t.ID)
 				}
 
 				err := b.DispatchTasks(ids, tasks)
 				if err != nil {
-					log.Println(err)
+					log.Error(err)
 				}
 			}
 			signal <- 1
@@ -182,7 +186,7 @@ func Try(fun func()) {
 	defer func() {
 		if err := recover(); err != nil {
 			debug.PrintStack()
-			log.Println(err)
+			log.Error(err)
 		}
 	}()
 	fun()

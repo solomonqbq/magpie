@@ -2,10 +2,10 @@ package db
 
 import (
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/xeniumd-china/flamingo/log"
 	"github.com/xeniumd-china/magpie/core"
 	"github.com/xeniumd-china/magpie/db/model"
 	"github.com/xeniumd-china/magpie/global"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -32,13 +32,13 @@ func NewDBWorker(group string) *core.Worker {
 		} else {
 			name = global.GetLocalIP()
 		}
-		log.Printf("准备注册worker")
+		log.Info("准备注册worker")
 		id, err := InsertWorker(name, time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second, b.Group)
 		if err != nil {
-			log.Println(err)
+			log.Error(err)
 			return err
 		}
-		log.Printf("注册worker成功,ID:%d", id)
+		log.Info("注册worker成功,ID:%d", id)
 		b.Id = strconv.Itoa(int(id))
 		return nil
 	}
@@ -48,9 +48,9 @@ func NewDBWorker(group string) *core.Worker {
 			id, _ := strconv.Atoi(b.Id)
 			err := UpdateWorkerTimeout(int64(id), time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second)
 			if err == nil {
-				log.Printf("%s完成心跳", b.Id)
+				log.Debug("%s完成心跳", b.Id)
 			} else {
-				log.Printf("%s心跳失败", b.Id)
+				log.Debug("%s心跳失败", b.Id)
 				return err
 			}
 		}
@@ -60,16 +60,16 @@ func NewDBWorker(group string) *core.Worker {
 	b.Cleanup = func(group string) {
 		workersId, err := QueryTimeoutWorker()
 		if workersId == nil || len(workersId) == 0 {
-			log.Println("清理完成..")
+			log.Debug("清理完成..")
 			return
 		}
 		//清理worker
 		count, err := DeleteTimeoutWorker(workersId)
 		if err != nil {
-			log.Printf("清除超时worker出错！%s", err)
+			log.Error("清除超时worker出错！%s", err)
 		}
 		if count != 0 {
-			log.Printf("清除%d个超时worker", count)
+			log.Info("清除%d个超时worker", count)
 		}
 	}
 
@@ -91,40 +91,39 @@ func NewDBWorker(group string) *core.Worker {
 			return nil, err
 		}
 		tasks = copyTasks(mp_tasks)
-		log.Printf("loadTasks:%d", len(tasks))
+		log.Debug("loadTasks:%d", len(tasks))
 		return
 	}
 	b.SelectLeader = func(group string) bool {
 		id, err := strconv.Atoi(b.Id)
 		if err != nil {
-			log.Printf("id不是个数字:%s", b.Id)
+			log.Error("id不是个数字:%s", b.Id)
 			return false
 		}
-		log.Printf("worker:%d准备选举组%s的组长", id, group)
+		log.Debug("worker:%d准备选举组%s的组长", id, group)
 		affect, err := UpdateWorkerGroup(group, int64(id), time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second)
 		if err != nil {
-			log.Println(err)
+			log.Error(err)
 			return false
 		} else {
-			log.Printf("选举结果%s,", strconv.FormatBool(affect >= 1))
+			log.Debug("选举结果%s,", strconv.FormatBool(affect >= 1))
 			return affect >= 1
 		}
 	}
 
 	b.DispatchTasks = func(workerIds []string, tasks []*core.Task) error {
 		if tasks == nil || len(tasks) == 0 {
-			log.Println("无任务分配...")
 			return nil
 		}
 		if workerIds == nil || len(workerIds) == 0 {
-			log.Println("无可用worker")
+			log.Warn("无可用worker")
 			return nil
 		}
 
 		//查询worker已分配的任务
 		ids, taskCount, err := QueryActiveTasks()
 		if err != nil {
-			log.Println(err)
+			log.Error(err)
 		}
 		//均分任务
 		wtm := make(map[int64]*WorkerTask, 0) //key是workerID
@@ -154,7 +153,7 @@ func NewDBWorker(group string) *core.Worker {
 	b.TakeTasks = func() (tasks []*core.Task, err error) {
 		mp_tasks, err := QueryDispatchedTasksByWorker(b.Id)
 		if err != nil {
-			log.Printf("领取任务出错！%s", err)
+			log.Error("领取任务出错！%s", err)
 		}
 		tasks = copyTasks(mp_tasks)
 		return tasks, nil
