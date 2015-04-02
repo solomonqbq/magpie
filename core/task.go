@@ -6,9 +6,9 @@ const (
 	TASK_NEW        = iota //新建任务
 	TASK_DISPATCHED        //已分配
 	TASK_RUNNING           //运行中
-	TASK_FAIL              //失败
-	TASK_SUCCESS           //成功
-	TASK_ERROR             //错误
+	TASK_FAIL              //失败,这个状态可以被重试
+	TASK_SUCCESS           //成功，这是个完结状态
+	TASK_ERROR             //错误，这个状态不可被重试，这是个完结状态
 )
 
 //任务
