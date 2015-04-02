@@ -43,7 +43,7 @@ func NewDBWorker() *core.Worker {
 		return nil
 	}
 
-	b.HeartBeat = func() {
+	b.HeartBeat = func() error {
 		if b.Id != "" {
 			id, _ := strconv.Atoi(b.Id)
 			err := UpdateWorkerTimeout(int64(id), time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second)
@@ -51,9 +51,10 @@ func NewDBWorker() *core.Worker {
 				log.Printf("%s完成心跳", b.Id)
 			} else {
 				log.Printf("%s心跳失败", b.Id)
+				return err
 			}
 		}
-
+		return nil
 	}
 
 	b.Cleanup = func(group string) {
@@ -89,7 +90,6 @@ func NewDBWorker() *core.Worker {
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("loadTasks bc:%d", len(tasks))
 		tasks = copyTasks(mp_tasks)
 		log.Printf("loadTasks:%d", len(tasks))
 		return
@@ -151,24 +151,15 @@ func NewDBWorker() *core.Worker {
 		return DispathTask(wts)
 	}
 
-	b.TakeTasks = func() {
+	b.TakeTasks = func() (tasks []*core.Task, err error) {
 		mp_tasks, err := QueryDispatchedTasksByWorker(b.Id)
 		if err != nil {
 			log.Printf("领取任务出错！%s", err)
 		}
-		//TODO
-		tasks := copyTasks(mp_tasks)
-		for _, t := range tasks {
-			log.Printf("分配任务%d", t.ID)
-		}
-		for _, t := range tasks {
-			id, _ := strconv.Atoi(t.ID)
-			err := UpdateTaskStatus(id, core.TASK_RUNNING)
-			if err != nil {
-				log.Printf("更新任务状态出错！")
-			}
-		}
+		tasks = copyTasks(mp_tasks)
+		return tasks, nil
 	}
+
 	return b
 }
 
@@ -201,7 +192,7 @@ func copyTasks(mp_tasks []*model.Mp_task) []*core.Task {
 		t.Group = mp_t.Group
 		t.Name = mp_t.Name
 		t.Context = make(map[string]interface{}, 0)
-		//分号分割
+		//逗号分割
 		if mp_t.Context != "" {
 			params := strings.Split(mp_t.Context, ",")
 			for _, p := range params {
@@ -212,6 +203,11 @@ func copyTasks(mp_tasks []*model.Mp_task) []*core.Task {
 		t.Status = mp_t.Status
 		t.Running_type = core.RUNNING_TYPE(mp_t.Run_type)
 		t.Interval = time.Duration(mp_t.Interval) * time.Second
+		t.UpdateStatus = func(status int32, err error) error {
+			tid, _ := strconv.ParseInt(t.ID, 0, 64)
+			return UpdateTaskStatusErr(tid, int(status), err)
+		}
+
 		tasks = append(tasks, t)
 	}
 	return tasks

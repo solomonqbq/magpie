@@ -33,14 +33,25 @@ const (
 	QUERY_DISPATCHED_TASKS = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval` FROM `mp_task` WHERE `status`=1 and `worker_id`=?"
 	QUERY_ACTIVE_TASKS     = "SELECT count(`id`),`worker_id` from `mp_task` where `status` = 1 or `status` = 2 group by `worker_id`"
 
-	UPDATE_WORKER_GROUP          = "UPDATE `mp_worker_group` SET `group` = ? , `worker_id` = ? , `time_out`= DATE_ADD(now(),INTERVAL ? SECOND) WHERE (`group`=? and `worker_id`=?) or (`time_out` < now())"
-	UPDATE_WORKER_TIME_OUT       = "UPDATE `mp_worker` SET `time_out`=DATE_ADD(now(),INTERVAL ? SECOND) WHERE id = ?"
-	UPDATE_TASK_OWNER            = "UPDATE `mp_task` set `status` = 1,`worker_id`=%d where `id` in (%s)"
-	UPDATE_TASK_STATUS_BY_WORKER = "UPDATE `mp_task` set `status` = ? where `worker_id` = ?"
-	UPDATE_TASK_STATUS_BY_ID     = "UPDATE `mp_task` set `status` = ? where `id` = ?"
+	UPDATE_WORKER_GROUP            = "UPDATE `mp_worker_group` SET `group` = ? , `worker_id` = ? , `time_out`= DATE_ADD(now(),INTERVAL ? SECOND) WHERE (`group`=? and `worker_id`=?) or (`time_out` < now())"
+	UPDATE_WORKER_TIME_OUT         = "UPDATE `mp_worker` SET `time_out`=DATE_ADD(now(),INTERVAL ? SECOND) WHERE id = ?"
+	UPDATE_TASK_OWNER              = "UPDATE `mp_task` set `status` = 1,`worker_id`=%d where `id` in (%s)"
+	UPDATE_TASK_STATUS_BY_WORKER   = "UPDATE `mp_task` set `status` = ? where `worker_id` = ? and (`status`<>4 and `status`<>5)"
+	UPDATE_TASK_STATUS_BY_ID       = "UPDATE `mp_task` set `status` = ? where `id` = ?"
+	UPDATE_TASK_STATUS_ERROR_BY_ID = "UPDATE `mp_task` set `status` = ?,`exception` = ? where `id` = ?"
 )
 
-func UpdateTaskStatus(id int, status int) error {
+func UpdateTaskStatusErr(id int64, status int, exp error) error {
+	var err error
+	if exp == nil {
+		_, err = dataSource.Exec(UPDATE_TASK_STATUS_BY_ID, status, id)
+	} else {
+		_, err = dataSource.Exec(UPDATE_TASK_STATUS_ERROR_BY_ID, status, exp.Error(), id)
+	}
+	return err
+}
+
+func UpdateTaskStatus(id int64, status int) error {
 	_, err := dataSource.Exec(UPDATE_TASK_STATUS_BY_ID, status, id)
 	return err
 }
@@ -78,7 +89,7 @@ func DispathTask(wts []*WorkerTask) error {
 			}
 			task_id_param = task_id_param + strconv.FormatInt(tid, 10)
 		}
-		fmt.Println(fmt.Sprintf(UPDATE_TASK_OWNER, wt.id, task_id_param))
+		//		fmt.Println(fmt.Sprintf(UPDATE_TASK_OWNER, wt.id, task_id_param))
 		result, err := tx.Exec(fmt.Sprintf(UPDATE_TASK_OWNER, wt.id, task_id_param))
 		if err != nil {
 			tx.Rollback()
@@ -253,7 +264,6 @@ func queryTasksByStatus(group string, status []int) (tasks []*model.Mp_task, err
 	}
 	rows, err := dataSource.Query(fmt.Sprintf(QUERY_TASKS, group, status_param))
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 	defer rows.Close()

@@ -1,7 +1,10 @@
 package core
 
 import (
+	"errors"
+	"github.com/xeniumd-china/magpie/global"
 	"log"
+	"runtime/debug"
 	"time"
 )
 
@@ -13,9 +16,9 @@ const (
 )
 
 type Worker struct {
-	running bool
-	Id      string //ID
-
+	running           bool
+	Id                string                                             //ID
+	Executors         map[string]*Task_Executor                          //key是taskId
 	Init              func() error                                       //初始化方法
 	SelectLeader      func(group string) bool                            //选举组长
 	DispatchTasks     func(workerIds []string, tasks []*Task) error      //分配任务
@@ -23,13 +26,14 @@ type Worker struct {
 	LoadActiveWorkers func(group string) (workerIds []string, err error) //加载最新活动worker
 	LoadTasks         func(group string) (tasks []*Task, err error)      //加载最新任务
 	Cleanup           func(group string)                                 //清理
-	HeartBeat         func()                                             //心跳
-	TakeTasks         func()                                             //领任务
+	HeartBeat         func() error                                       //心跳
+	TakeTasks         func() (tasks []*Task, err error)                  //领任务
 }
 
 func NewWorker() *Worker {
 	b := new(Worker)
 	b.running = false
+	b.Executors = make(map[string]*Task_Executor, 0)
 	return b
 }
 
@@ -50,8 +54,26 @@ func (b *Worker) Start() error {
 
 	//定时心跳
 	go func() {
+		max_err_count := int(global.Properties.Int("worker.heartbeat.max.error.count", 3))
+		//连续失败次数
+		err_count := 0
 		for b.running {
-			b.HeartBeat()
+			err := b.HeartBeat()
+			if err != nil {
+				err_count++
+			} else {
+				err_count = 0
+			}
+
+			if err_count >= max_err_count {
+				//启动失败处理机制
+				for tid, te := range b.Executors {
+					go Try(func() {
+						te.Stop()
+						te.Task.UpdateStatus(TASK_FAIL, errors.New("任务节点已死，放弃任务"+tid+"..."))
+					})
+				}
+			}
 			time.Sleep(BOARD_REFRESH_INTERVAL)
 		}
 	}()
@@ -59,7 +81,46 @@ func (b *Worker) Start() error {
 	//定时获取任务
 	go func() {
 		for b.running {
-			b.TakeTasks()
+			tasks, err := b.TakeTasks()
+			if err != nil {
+				log.Println("领取任务出错！%s", err)
+				continue
+			} else {
+				//分配任务
+				for _, t := range tasks {
+					te := GetTaskExecutor(t.Name)
+					if te == nil {
+						log.Printf("不支持的任务:%s", t.Name)
+						t.UpdateStatus(TASK_FAIL, errors.New("任务节点不支持名为"+t.Name+"的任务！"))
+						continue
+					} else {
+						te.Task = t
+						Try(func() {
+							//启动新的te
+							v, ok := b.Executors[t.ID]
+							if ok {
+								//已有任务，需要杀掉重新执行
+								v.Stop()
+							}
+							b.Executors[t.ID] = te
+							if err != nil {
+								t.UpdateStatus(TASK_FAIL, err)
+							} else {
+								err := te.Init()
+								if err != nil {
+									te.Task.UpdateStatus(TASK_FAIL, errors.New("task executor初始化失败！"))
+									return
+								}
+								r := te.Execute()
+								err = te.Task.UpdateStatus(r.Result_code, r.Error)
+								if err != nil {
+									log.Printf("任务%s状态更新失败,错误:%s", te.Task.ID, err)
+								}
+							}
+						})
+					}
+				}
+			}
 			time.Sleep(BOARD_REFRESH_INTERVAL)
 		}
 	}()
@@ -67,7 +128,7 @@ func (b *Worker) Start() error {
 	return nil
 }
 
-//务选举组长并分派任务
+//选举组长并分派任务
 func (b *Worker) selectLeaderAndDispatch() {
 	groups, err := b.LoadAllGroup()
 	if err != nil {
@@ -113,4 +174,14 @@ func (b *Worker) selectLeaderAndDispatch() {
 
 func (b *Worker) IsStarted() bool {
 	return b.running
+}
+
+func Try(fun func()) {
+	defer func() {
+		if err := recover(); err != nil {
+			debug.PrintStack()
+			log.Println(err)
+		}
+	}()
+	fun()
 }

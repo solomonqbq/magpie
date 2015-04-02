@@ -11,6 +11,10 @@ import (
 
 var Properties properties.Properties
 
+func Load(properties_file string) {
+	Properties, _ = properties.Load(properties_file)
+}
+
 var FORMAT_SECOND = "2006-01-02 15:04:05"
 
 func NowStr() string {

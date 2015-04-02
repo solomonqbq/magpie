@@ -54,16 +54,18 @@ func NewMockBoard() *Worker {
 		return
 	}
 
-	b.HeartBeat = func() {
+	b.HeartBeat = func() error {
 		log.Println("heart beat")
+		return nil
 	}
 
 	b.Cleanup = func(group string) {
 		log.Println("clean up done")
 		return
 	}
-	b.TakeTasks = func() {
+	b.TakeTasks = func() (tasks []*Task, err error) {
 		log.Printf("%s的worker领取任务...", b.Id)
+		return make([]*Task, 0), nil
 	}
 	return b
 }
