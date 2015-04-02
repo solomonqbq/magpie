@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/xeniumd-china/magpie/core"
 	"github.com/xeniumd-china/magpie/db"
 	"github.com/xeniumd-china/magpie/global"
@@ -28,6 +29,7 @@ func NewMockTaskExecutor(taskName string) *core.Task_Executor {
 			r.Result_code = core.TASK_FAIL
 			r.Error = errors.New("mock error")
 		}
+		fmt.Println(te.Task.Context)
 		time.Sleep(3 * time.Second)
 		return r
 	}

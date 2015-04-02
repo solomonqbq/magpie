@@ -28,9 +28,9 @@ const (
 
 	QUERY_ACTIVE_WORKERS   = "SELECT `id` FROM `mp_worker` WHERE `time_out`>= now()"
 	QUERY_ALL_GROUP        = "SELECT `group` FROM `mp_group`"
-	QUERY_TASKS            = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval` FROM `mp_task` WHERE `group` = '%s' and `status` in (%s)"
+	QUERY_TASKS            = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval`,`context` FROM `mp_task` WHERE `group` = '%s' and `status` in (%s)"
 	QUERY_TIME_OUT_WORKER  = "SELECT `id` FROM `mp_worker` WHERE `time_out` < now()"
-	QUERY_DISPATCHED_TASKS = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval` FROM `mp_task` WHERE `status`=1 and `worker_id`=?"
+	QUERY_DISPATCHED_TASKS = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval`,`context` FROM `mp_task` WHERE `status`=1 and `worker_id`=?"
 	QUERY_ACTIVE_TASKS     = "SELECT count(`id`),`worker_id` from `mp_task` where `status` = 1 or `status` = 2 group by `worker_id`"
 
 	UPDATE_WORKER_GROUP            = "UPDATE `mp_worker_group` SET `group` = ? , `worker_id` = ? , `time_out`= DATE_ADD(now(),INTERVAL ? SECOND) WHERE (`group`=? and `worker_id`=?) or (`time_out` < now())"
@@ -64,7 +64,7 @@ func QueryDispatchedTasksByWorker(worker_id string) (tasks []*model.Mp_task, err
 	defer rows.Close()
 	for rows.Next() {
 		t := new(model.Mp_task)
-		err = rows.Scan(&t.Id, &t.Name, &t.Group, &t.Worker_id, &t.Status, &t.Run_type, &t.Interval)
+		err = rows.Scan(&t.Id, &t.Name, &t.Group, &t.Worker_id, &t.Status, &t.Run_type, &t.Interval, &t.Context)
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +270,7 @@ func queryTasksByStatus(group string, status []int) (tasks []*model.Mp_task, err
 	tasks = make([]*model.Mp_task, 0)
 	for rows.Next() {
 		t := new(model.Mp_task)
-		err = rows.Scan(&t.Id, &t.Name, &t.Group, &t.Worker_id, &t.Status, &t.Run_type, &t.Interval)
+		err = rows.Scan(&t.Id, &t.Name, &t.Group, &t.Worker_id, &t.Status, &t.Run_type, &t.Interval, &t.Context)
 		if err != nil {
 			return nil, err
 		}
