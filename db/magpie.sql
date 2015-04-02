@@ -3,7 +3,7 @@
 -- http://www.phpmyadmin.net
 --
 -- 主机: 192.168.15.64:3306
--- 生成日期: 2015-04-02 16:02:13
+-- 生成日期: 2015-04-02 16:10:19
 -- 服务器版本: 5.6.17-log
 -- PHP 版本: 5.5.9-1ubuntu4.6
 
@@ -71,12 +71,12 @@ CREATE TABLE IF NOT EXISTS `mp_task` (
 --
 
 INSERT INTO `mp_task` (`id`, `name`, `context`, `group`, `worker_id`, `retry`, `run_type`, `interval`, `exception`, `created_time`, `updated_tIme`, `status`) VALUES
-(1, 'test0', 'a=1,b=2', 'test_group', 110, 0, 0, 0, '', '0000-00-00 00:00:00', '2015-04-02 07:42:41', 0),
-(2, 'test1', 'a=1,b=2', 'test_group', 110, 0, 0, 0, '', '0000-00-00 00:00:00', '2015-04-02 07:42:41', 0),
-(3, 'test2', 'a=1,b=2', 'test_group', 110, 0, 0, 0, '', '0000-00-00 00:00:00', '2015-04-02 07:42:41', 0),
-(4, 'test3', 'a=51,b=25', 'test_group', 110, 0, 0, 0, '', '0000-00-00 00:00:00', '2015-04-02 07:42:41', 0),
-(5, 'test4', 'a=21,b=277', 'test_group', 110, 0, 0, 0, '', '0000-00-00 00:00:00', '2015-04-02 07:42:41', 0),
-(6, 'test5', 'a=1,b=http://baidu.com', 'test_group', 110, 0, 0, 0, '', '0000-00-00 00:00:00', '2015-04-02 07:42:41', 0);
+(1, 'test0', 'a=1,b=2', 'test_group', 114, 0, 0, 0, 'mock error', '0000-00-00 00:00:00', '2015-04-02 07:50:58', 0),
+(2, 'test1', 'a=1,b=2', 'test_group', 114, 0, 0, 0, 'mock error', '0000-00-00 00:00:00', '2015-04-02 07:50:58', 0),
+(3, 'test2', 'a=1,b=2', 'test_group', 113, 0, 0, 0, 'mock error', '0000-00-00 00:00:00', '2015-04-02 07:50:58', 0),
+(4, 'test3', 'a=51,b=25', 'test_group', 113, 0, 0, 0, 'mock error', '0000-00-00 00:00:00', '2015-04-02 07:50:58', 0),
+(5, 'test4', 'a=21,b=277', 'test_group', 113, 0, 0, 0, '', '0000-00-00 00:00:00', '2015-04-02 07:50:58', 0),
+(6, 'test5', 'a=1,b=http://baidu.com', 'test_group', 113, 0, 0, 0, 'mock error', '0000-00-00 00:00:00', '2015-04-02 07:50:58', 0);
 
 -- --------------------------------------------------------
 
@@ -93,7 +93,14 @@ CREATE TABLE IF NOT EXISTS `mp_worker` (
   `time_out` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00' COMMENT '到期有效时',
   PRIMARY KEY (`id`),
   KEY `group` (`group`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8 AUTO_INCREMENT=111 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8 AUTO_INCREMENT=115 ;
+
+--
+-- 转存表中的数据 `mp_worker`
+--
+
+INSERT INTO `mp_worker` (`id`, `name`, `group`, `created_time`, `updated_time`, `time_out`) VALUES
+(114, '10.12.121.72', 'test_group', '2015-04-02 08:07:28', '2015-04-02 07:49:21', '2015-04-02 07:49:31');
 
 -- --------------------------------------------------------
 
@@ -110,7 +117,14 @@ CREATE TABLE IF NOT EXISTS `mp_worker_group` (
   `updated_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `group` (`group`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8 AUTO_INCREMENT=63 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8 AUTO_INCREMENT=64 ;
+
+--
+-- 转存表中的数据 `mp_worker_group`
+--
+
+INSERT INTO `mp_worker_group` (`id`, `group`, `worker_id`, `time_out`, `created_time`, `updated_time`) VALUES
+(63, 'test_group', 114, '2015-04-02 07:49:31', '0000-00-00 00:00:00', '2015-04-02 07:49:21');
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
