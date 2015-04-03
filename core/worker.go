@@ -117,7 +117,17 @@ func (b *Worker) Start() error {
 									te.Task.UpdateStatus(TASK_FAIL, errors.New("task executor初始化失败！"))
 									return
 								}
+								begin := time.Now()
 								r := te.Execute()
+								//控制间隔
+								if te.Task.Running_type == RUNNING_TYPE(0) && te.Task.Interval > 0 {
+									//周期任务
+									end := time.Now()
+									elapsed_sec := end.Unix() - begin.Unix()
+									if elapsed_sec < te.Task.Interval {
+										time.Sleep(time.Duration(te.Task.Interval-elapsed_sec) * time.Second)
+									}
+								}
 								err = te.Task.UpdateStatus(r.Result_code, r.Error)
 								if err != nil {
 									log.Error("任务%s状态更新失败,错误:%s", te.Task.ID, err)
