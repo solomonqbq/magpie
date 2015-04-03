@@ -29,6 +29,7 @@ const (
 	QUERY_ACTIVE_WORKERS   = "SELECT `id` FROM `mp_worker` WHERE `time_out`>= now() and `group`=?"
 	QUERY_ALL_GROUP        = "SELECT `group` FROM `mp_group`"
 	QUERY_TASKS            = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval`,`context` FROM `mp_task` WHERE `group` = '%s' and `status` in (%s)"
+	QUERY_NEW_FAILED_TASKS = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval`,`context` FROM `mp_task` WHERE `group` = '%s' and `status` in (%s) and DATE_ADD(`updated_time`,INTERVAL `interval` SECOND) <=now()"
 	QUERY_TIME_OUT_WORKER  = "SELECT `id` FROM `mp_worker` WHERE `time_out` < now()"
 	QUERY_DISPATCHED_TASKS = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval`,`context` FROM `mp_task` WHERE `status`=1 and `worker_id`=?"
 	QUERY_ACTIVE_TASKS     = "SELECT count(`id`),`worker_id` from `mp_task` where `status` = 1 or `status` = 2 group by `worker_id`"
@@ -262,7 +263,7 @@ func queryTasksByStatus(group string, status []int) (tasks []*model.Mp_task, err
 		}
 		status_param = status_param + strconv.Itoa(s)
 	}
-	rows, err := dataSource.Query(fmt.Sprintf(QUERY_TASKS, group, status_param))
+	rows, err := dataSource.Query(fmt.Sprintf(QUERY_NEW_FAILED_TASKS, group, status_param))
 	if err != nil {
 		return nil, err
 	}
