@@ -33,7 +33,7 @@ const (
 	QUERY_DISPATCHED_TASKS = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval`,`context` FROM `mp_task` WHERE `status`=1 and `worker_id`=?"
 	QUERY_ACTIVE_TASKS     = "SELECT count(`id`),`worker_id` from `mp_task` where `status` = 1 or `status` = 2 group by `worker_id`"
 
-	UPDATE_WORKER_GROUP            = "UPDATE `mp_worker_group` SET `group` = ? , `worker_id` = ? , `time_out`= DATE_ADD(now(),INTERVAL ? SECOND) WHERE (`group`=? and `worker_id`=?) or (`time_out` < now())"
+	UPDATE_WORKER_GROUP            = "UPDATE `mp_worker_group` SET `worker_id` = ? , `time_out`= DATE_ADD(now(),INTERVAL ? SECOND) WHERE (`group`=? and `worker_id`=?) or (`time_out` < now())"
 	UPDATE_WORKER_TIME_OUT         = "UPDATE `mp_worker` SET `time_out`=DATE_ADD(now(),INTERVAL ? SECOND) WHERE id = ?"
 	UPDATE_TASK_OWNER              = "UPDATE `mp_task` set `status` = 1,`worker_id`=%d where `id` in (%s)"
 	UPDATE_TASK_STATUS_BY_WORKER   = "UPDATE `mp_task` set `status` = ? where `worker_id` = ? and (`status`<>4 and `status`<>5)"
@@ -143,7 +143,7 @@ func InsertWorker(name string, time_out_interval time.Duration, group string) (i
 }
 
 func UpdateWorkerGroup(group string, worker_id int64, time_out_interval time.Duration) (affact int64, err error) {
-	result, err := dataSource.Exec(UPDATE_WORKER_GROUP, group, worker_id, time_out_interval/time.Second, group, worker_id)
+	result, err := dataSource.Exec(UPDATE_WORKER_GROUP, worker_id, time_out_interval/time.Second, group, worker_id)
 	if err != nil {
 		return 0, err
 	}

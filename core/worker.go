@@ -60,7 +60,7 @@ func (b *Worker) Start() error {
 
 	//定时心跳
 	go func() {
-		max_err_count := int(global.Properties.Int("worker.heartbeat.max.error.count", 3))
+		max_err_count := int(global.Properties.Int("magpie.worker.heartbeat.max.error.count", 3))
 		//连续失败次数
 		err_count := 0
 		for b.running {
@@ -148,17 +148,17 @@ func (b *Worker) selectLeaderAndDispatch() {
 	}
 	signal := make(chan int, 1)
 	for _, group := range groups {
-		go func() {
-			leader := b.SelectLeader(group)
+		go func(g string) {
+			leader := b.SelectLeader(g)
 			if leader {
-				go b.Cleanup(group)
+				go b.Cleanup(g)
 				//成为组长
-				ids, _ := b.LoadActiveWorkers(group)
+				ids, _ := b.LoadActiveWorkers(g)
 				for _, id := range ids {
-					log.Debug("active member Id:%s group:%s", id, group)
+					log.Debug("active member Id:%s group:%s", id, g)
 				}
 
-				tasks, _ := b.LoadTasks(group)
+				tasks, _ := b.LoadTasks(g)
 				for _, t := range tasks {
 					log.Debug("active task Id:%s", t.ID)
 				}
@@ -169,7 +169,7 @@ func (b *Worker) selectLeaderAndDispatch() {
 				}
 			}
 			signal <- 1
-		}()
+		}(group)
 	}
 	//等待所有的组都完成
 	for counter > 0 {

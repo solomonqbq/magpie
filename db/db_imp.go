@@ -33,7 +33,7 @@ func NewDBWorker(group string) *core.Worker {
 			name = global.GetLocalIP()
 		}
 		log.Info("准备注册worker")
-		id, err := InsertWorker(name, time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second, b.Group)
+		id, err := InsertWorker(name, time.Duration(global.Properties.Int("magpie.worker.timeout.interval", 10))*time.Second, b.Group)
 		if err != nil {
 			log.Error(err)
 			return err
@@ -196,7 +196,9 @@ func copyTasks(mp_tasks []*model.Mp_task) []*core.Task {
 			params := strings.Split(mp_t.Context, ",")
 			for _, p := range params {
 				str := strings.SplitN(p, "=", 2)
-				t.Context[str[0]] = str[1]
+				if len(str) == 2 {
+					t.Context[str[0]] = str[1]
+				}
 			}
 		}
 		t.Status = mp_t.Status
