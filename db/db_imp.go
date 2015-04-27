@@ -91,7 +91,7 @@ func NewDBWorker(group string) *core.Worker {
 			return nil, err
 		}
 		tasks = copyTasks(mp_tasks)
-		log.Debug("组%sloadTasks:%d", group, len(tasks))
+		log.Debug("组%s loadTasks:%d", group, len(tasks))
 		return
 	}
 	b.SelectLeader = func(group string) bool {

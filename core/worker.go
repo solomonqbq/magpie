@@ -119,6 +119,7 @@ func (b *Worker) Start() error {
 								}
 								r := te.Execute()
 								err = te.Task.UpdateStatus(r.Result_code, r.Error)
+								log.Debug("更新任务%s的状态为%d", r.Task.ID, r.Result_code)
 								if err != nil {
 									log.Error("任务%s状态更新失败,错误:%s", te.Task.ID, err)
 								}
