@@ -2,7 +2,7 @@ package db
 
 import (
 	_ "github.com/go-sql-driver/mysql"
-	l "github.com/xeniumd-china/flamingo/log"
+	"github.com/xeniumd-china/flamingo/log"
 	"github.com/xeniumd-china/magpie/core"
 	"github.com/xeniumd-china/magpie/db/model"
 	"github.com/xeniumd-china/magpie/global"
@@ -16,10 +16,6 @@ type WorkerTask struct {
 	old_task_count int64
 	new_task_id    []int64
 }
-
-var (
-	log = l.GetLogger("magpie")
-)
 
 func NewDBWorker(group string) *core.Worker {
 	b := core.NewWorker(group)
