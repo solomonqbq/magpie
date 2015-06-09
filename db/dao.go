@@ -152,9 +152,13 @@ func UpdateWorkerGroup(group string, worker_id int64, time_out_interval time.Dur
 	return
 }
 
-func UpdateWorkerTimeout(id int64, interval time.Duration) error {
-	_, err := dataSource.Exec(UPDATE_WORKER_TIME_OUT, interval/time.Second, id)
-	return err
+func UpdateWorkerTimeout(id int64, interval time.Duration) (affected int64, err error) {
+	result, err := dataSource.Exec(UPDATE_WORKER_TIME_OUT, interval/time.Second, id)
+	if err != nil {
+		return 0, err
+	}
+	affected, err = result.RowsAffected()
+	return
 }
 
 func QueryTimeoutWorker() (workersId []int64, err error) {

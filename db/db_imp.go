@@ -17,6 +17,29 @@ type WorkerTask struct {
 	new_task_id    []int64
 }
 
+func register(name string, group string) (id int64, err error) {
+	log.Info("准备注册worker")
+	id, err = InsertWorker(name, time.Duration(global.Properties.Int("magpie.worker.timeout.interval", 10))*time.Second, group)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info("注册worker成功,ID:%d", id)
+	return
+}
+
+func getName() string {
+	//注册并获取ID
+	useFirtIP := global.Properties.Bool("magpie.firstIP", true)
+	var name string
+	if useFirtIP {
+		name = global.GetFirstLocalIP()
+	} else {
+		name = global.GetLocalIP()
+	}
+	return name
+}
+
 func NewDBWorker(group string) *core.Worker {
 	b := core.NewWorker(group)
 
@@ -25,20 +48,12 @@ func NewDBWorker(group string) *core.Worker {
 		InitAllDS(global.Properties)
 
 		//注册并获取ID
-		useFirtIP := global.Properties.Bool("magpie.firstIP", true)
-		var name string
-		if useFirtIP {
-			name = global.GetFirstLocalIP()
-		} else {
-			name = global.GetLocalIP()
-		}
-		log.Info("准备注册worker")
-		id, err := InsertWorker(name, time.Duration(global.Properties.Int("magpie.worker.timeout.interval", 10))*time.Second, b.Group)
+		name := getName()
+		id, err := register(name, b.Group)
 		if err != nil {
 			log.Error(err)
 			return err
 		}
-		log.Info("注册worker成功,ID:%d", id)
 		b.Id = strconv.Itoa(int(id))
 		return nil
 	}
@@ -46,8 +61,18 @@ func NewDBWorker(group string) *core.Worker {
 	b.HeartBeat = func() error {
 		if b.Id != "" {
 			id, _ := strconv.Atoi(b.Id)
-			err := UpdateWorkerTimeout(int64(id), time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second)
+			affected, err := UpdateWorkerTimeout(int64(id), time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second)
 			if err == nil {
+				if affected == 0 {
+					log.Info("当前任务已被清除，需重新注册...")
+					//重新注册
+					id, err := register(getName(), b.Group)
+					if err != nil {
+						log.Error("注册失败:%s", err)
+						return err
+					}
+					b.Id = strconv.Itoa(int(id))
+				}
 				log.Debug("%s完成心跳", b.Id)
 			} else {
 				log.Debug("%s心跳失败", b.Id)
