@@ -2,6 +2,7 @@ package db
 
 import (
 	"github.com/dmotylev/goproperties"
+	"github.com/xeniumd-china/magpie/core"
 	"github.com/xeniumd-china/magpie/global"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func initGroup() {
 
 func TestDBBoard(t *testing.T) {
 	initGroup()
-	b := NewDBWorker()
+	b := core.NewWorkerExecutor(NewDBWorker())
 	b.Start()
 	//	b.Init()
 	//	groups, err := b.LoadAllGroup()

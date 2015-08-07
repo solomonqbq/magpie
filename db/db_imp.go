@@ -40,49 +40,52 @@ func getName() string {
 	return name
 }
 
-func NewDBWorker(group string) *core.Worker {
-	b := core.NewWorker(group)
-
-	b.Init = func() error {
+func Init(worker *core.Worker) func() error {
+	return func() error {
 		//构造DB连接
 		InitAllDS(global.Properties)
 
 		//注册并获取ID
 		name := getName()
-		id, err := register(name, b.Group)
+		id, err := register(name, worker.Group)
 		if err != nil {
 			log.Error(err)
 			return err
 		}
-		b.Id = strconv.Itoa(int(id))
+		worker.Id = strconv.Itoa(int(id))
 		return nil
 	}
+}
 
-	b.HeartBeat = func() error {
-		if b.Id != "" {
-			id, _ := strconv.Atoi(b.Id)
+func HeartBeat(w *core.Worker) func() error {
+	return func() error {
+		if w.Id != "" {
+			id, _ := strconv.Atoi(w.Id)
 			affected, err := UpdateWorkerTimeout(int64(id), time.Duration(global.Properties.Int("woker.timeout.interval", 10))*time.Second)
 			if err == nil {
 				if affected == 0 {
 					log.Info("当前任务已被清除，需重新注册...")
 					//重新注册
-					id, err := register(getName(), b.Group)
+					id, err := register(getName(), w.Group)
 					if err != nil {
 						log.Error("注册失败:%s", err)
 						return err
 					}
-					b.Id = strconv.Itoa(int(id))
+					w.Id = strconv.Itoa(int(id))
 				}
-				log.Debug("%s完成心跳", b.Id)
+				log.Debug("%s完成心跳", w.Id)
 			} else {
-				log.Debug("%s心跳失败", b.Id)
+				log.Debug("%s心跳失败", w.Id)
 				return err
 			}
 		}
 		return nil
 	}
+}
 
-	b.Cleanup = func(group string) {
+func Cleanup(w *core.Worker) func(group string) {
+	return func(group string) {
+		//清理超时worker
 		workersId, err := QueryTimeoutWorker()
 		if workersId == nil || len(workersId) == 0 {
 			log.Debug("清理完成..")
@@ -97,20 +100,10 @@ func NewDBWorker(group string) *core.Worker {
 			log.Info("清除%d个超时worker", count)
 		}
 	}
+}
 
-	b.LoadAllGroup = func() (groups []string, err error) {
-		return QueryAllGroup()
-	}
-
-	b.LoadActiveWorkers = func(group string) (ids []string, err error) {
-		ids, err = QueryActiveWorkers(group)
-		if err != nil {
-			return nil, err
-		}
-		return
-	}
-
-	b.LoadTasks = func(group string) (tasks []*core.Task, err error) {
+func LoadTasks() func(group string) (tasks []*core.Task, err error) {
+	return func(group string) (tasks []*core.Task, err error) {
 		mp_tasks, err := QueryNewAndFailedTasks(group)
 		if err != nil {
 			return nil, err
@@ -119,10 +112,13 @@ func NewDBWorker(group string) *core.Worker {
 		log.Debug("组%s loadTasks:%d", group, len(tasks))
 		return
 	}
-	b.SelectLeader = func(group string) bool {
-		id, err := strconv.Atoi(b.Id)
+}
+
+func SelectLeader(w *core.Worker) func(group string) bool {
+	return func(group string) bool {
+		id, err := strconv.Atoi(w.Id)
 		if err != nil {
-			log.Error("id不是个数字:%s", b.Id)
+			log.Error("id不是个数字:%s", w.Id)
 			return false
 		}
 		log.Debug("worker:%d准备选举组%s的组长", id, group)
@@ -135,8 +131,10 @@ func NewDBWorker(group string) *core.Worker {
 			return affect >= 1
 		}
 	}
+}
 
-	b.DispatchTasks = func(workerIds []string, tasks []*core.Task) error {
+func DispatchTasks(w *core.Worker) func(workerIds []string, tasks []*core.Task) error {
+	return func(workerIds []string, tasks []*core.Task) error {
 		if tasks == nil || len(tasks) == 0 {
 			return nil
 		}
@@ -174,17 +172,58 @@ func NewDBWorker(group string) *core.Worker {
 		}
 		return DispathTask(wts)
 	}
+}
 
-	b.TakeTasks = func() (tasks []*core.Task, err error) {
-		mp_tasks, err := QueryDispatchedTasksByWorker(b.Id)
+func TakeTasks(w *core.Worker) func() (tasks []*core.Task, err error) {
+	return func() (tasks []*core.Task, err error) {
+		mp_tasks, err := QueryDispatchedTasksByWorker(w.Id)
 		if err != nil {
 			log.Error("领取任务出错！%s", err)
 		}
 		tasks = copyTasks(mp_tasks)
 		return tasks, nil
 	}
+}
 
-	return b
+func NewDBWorker(group string) *core.Worker {
+	w := core.NewWorker(group)
+
+	//初始化方法
+	w.Init = Init(w)
+
+	//心跳实现
+	w.HeartBeat = HeartBeat(w)
+
+	//清理
+	w.Cleanup = Cleanup(w)
+
+	//查组
+	w.LoadAllGroup = func() (groups []string, err error) {
+		return QueryAllGroup()
+	}
+
+	//加载所有存活的用户
+	w.LoadActiveWorkers = func(group string) (ids []string, err error) {
+		ids, err = QueryActiveWorkers(group)
+		if err != nil {
+			return nil, err
+		}
+		return
+	}
+
+	//加载所有任务
+	w.LoadTasks = LoadTasks()
+
+	//竞选组长
+	w.SelectLeader = SelectLeader(w)
+
+	//分配任务
+	w.DispatchTasks = DispatchTasks(w)
+
+	//领任务
+	w.TakeTasks = TakeTasks(w)
+
+	return w
 }
 
 func LeastTaskWorker(wts []*WorkerTask) *WorkerTask {
