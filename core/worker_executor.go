@@ -112,7 +112,7 @@ func (this *Worker_Executor) do_occupy_tasks() {
 		} else {
 			//分配任务
 			for _, t := range tasks {
-				te := GetTaskExecutor(t.Name)
+				te := GetTaskExecutor(this.worker.Group, t.Name)
 				if te == nil {
 					log.Warn("不支持的任务:%s", t.Name)
 					t.UpdateStatus(TASK_FAIL, errors.New("任务节点不支持名为"+t.Name+"的任务！"))

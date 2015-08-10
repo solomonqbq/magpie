@@ -46,7 +46,7 @@ func main() {
 	global.Load(conf)
 	tns := []string{"deliver", "test1", "test2", "test3", "test4", "test5"}
 	for _, tn := range tns {
-		core.Registry(tn, NewMockTaskExecutor(tn))
+		core.Registry("load_balance", tn, NewMockTaskExecutor(tn))
 	}
 
 	w := core.NewWorkerExecutor(db.NewDBWorker("load_balance"))

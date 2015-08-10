@@ -1,5 +1,7 @@
 package core
 
+import "sync"
+
 type Task_Executor struct {
 	//当前任务
 	Task        *Task
@@ -15,17 +17,26 @@ type Result struct {
 	Error       error
 }
 
-//key是taskName,value是executor
-var executor_map map[string]*Task_Executor = make(map[string]*Task_Executor)
+var lock = new(sync.RWMutex)
 
-func Registry(task_name string, task_executor *Task_Executor) {
-	executor_map[task_name] = task_executor
+//第一层key是group,第二层key是taskName,value是executor
+var executor_map map[string]map[string]*Task_Executor = make(map[string]map[string]*Task_Executor)
+
+func Registry(group, task_name string, task_executor *Task_Executor) {
+	lock.Lock()
+	defer lock.Unlock()
+	if _, ok := executor_map[group]; !ok {
+		executor_map[group] = make(map[string]*Task_Executor)
+	}
+	executor_map[group][task_name] = task_executor
 }
 
-func GetTaskExecutor(task_name string) *Task_Executor {
-	v, ok := executor_map[task_name]
-	if !ok {
+func GetTaskExecutor(group, task_name string) *Task_Executor {
+	lock.RLock()
+	defer lock.RUnlock()
+	if _, ok := executor_map[group]; !ok {
 		return nil
+	} else {
+		return executor_map[group][task_name]
 	}
-	return v
 }
