@@ -34,12 +34,13 @@ const (
 	QUERY_DISPATCHED_TASKS = "SELECT `id`, `name`, `group`, `worker_id`, `status`,`run_type`,`interval`,`context` FROM `mp_task` WHERE `status`=1 and `worker_id`=?"
 	QUERY_ACTIVE_TASKS     = "SELECT count(`id`),`worker_id` from `mp_task` where `status` = 1 or `status` = 2 group by `worker_id`"
 
-	UPDATE_WORKER_GROUP            = "UPDATE `mp_worker_group` SET `worker_id` = ? , `time_out`= DATE_ADD(now(),INTERVAL ? SECOND) WHERE (`group`=? and `worker_id`=?) or (`time_out` < now())"
-	UPDATE_WORKER_TIME_OUT         = "UPDATE `mp_worker` SET `time_out`=DATE_ADD(now(),INTERVAL ? SECOND) WHERE id = ?"
-	UPDATE_TASK_OWNER              = "UPDATE `mp_task` set `status` = 1,`worker_id`=%d where `id` in (%s)"
-	UPDATE_TASK_STATUS_BY_WORKER   = "UPDATE `mp_task` set `status` = ? where `worker_id` = ? and (`status`<>4 and `status`<>5)"
-	UPDATE_TASK_STATUS_BY_ID       = "UPDATE `mp_task` set `status` = ? where `id` = ?"
-	UPDATE_TASK_STATUS_ERROR_BY_ID = "UPDATE `mp_task` set `status` = ?,`exception` = ? where `id` = ?"
+	UPDATE_WORKER_GROUP             = "UPDATE `mp_worker_group` SET `worker_id` = ? , `time_out`= DATE_ADD(now(),INTERVAL ? SECOND) WHERE (`group`=? and `worker_id`=?) or (`time_out` < now())"
+	UPDATE_WORKER_TIME_OUT          = "UPDATE `mp_worker` SET `time_out`=DATE_ADD(now(),INTERVAL ? SECOND) WHERE id = ?"
+	UPDATE_TASK_OWNER               = "UPDATE `mp_task` set `status` = 1,`worker_id`=%d where `id` in (%s)"
+	UPDATE_TASK_STATUS_BY_WORKER    = "UPDATE `mp_task` set `status` = ? where `worker_id` = ? and (`status`<>4 and `status`<>5)"
+	UPDATE_TASK_STATUS_BY_ID        = "UPDATE `mp_task` set `status` = ? where `id` = ?"
+	UPDATE_TASK_STATUS_BY_WORKER_ID = "UPDATE `mp_task` set `status` = ? where `worker_id` = ?"
+	UPDATE_TASK_STATUS_ERROR_BY_ID  = "UPDATE `mp_task` set `status` = ?,`exception` = ? where `id` = ?"
 )
 
 func UpdateTaskStatusErr(id int64, status int, exp error) error {
@@ -54,6 +55,11 @@ func UpdateTaskStatusErr(id int64, status int, exp error) error {
 
 func UpdateTaskStatus(id int64, status int) error {
 	_, err := dataSource.Exec(UPDATE_TASK_STATUS_BY_ID, status, id)
+	return err
+}
+
+func UpdateTaskStatusByWorkerID(worker_id int64, status int) error {
+	_, err := dataSource.Exec(UPDATE_TASK_STATUS_BY_WORKER_ID, status, worker_id)
 	return err
 }
 
@@ -309,15 +315,15 @@ func QueryAllGroup() (groups []string, err error) {
 }
 
 //查询存活的组员
-func QueryActiveWorkers(group string) (workerIds []string, err error) {
+func QueryActiveWorkers(group string) (workerIds []int64, err error) {
 	rows, err := dataSource.Query(QUERY_ACTIVE_WORKERS, group)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	workerIds = make([]string, 0)
+	workerIds = make([]int64, 0)
 	for rows.Next() {
-		var Id string
+		var Id int64
 		err = rows.Scan(&Id)
 		if err != nil {
 			return nil, err

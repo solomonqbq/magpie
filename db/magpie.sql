@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS `mp_task` (
   `status` tinyint(4) NOT NULL DEFAULT '0' COMMENT '0:新任务 1:已分配 2:运行中 3::失败 4:成功 5:错误',
   PRIMARY KEY (`id`),
   KEY `status` (`status`),
+  KEY `worker_id` (`worker_id`),
   KEY `group` (`group`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8 AUTO_INCREMENT=7 ;
 

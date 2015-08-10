@@ -44,12 +44,12 @@ func main() {
 	confs := []string{"magpie.properties", "src/github.com/xeniumd-china/magpie/magpie.properties"}
 	conf := global.FindConf(confs)
 	global.Load(conf)
-	tns := []string{"test0", "test1", "test2", "test3", "test4", "test5"}
+	tns := []string{"deliver", "test1", "test2", "test3", "test4", "test5"}
 	for _, tn := range tns {
 		core.Registry(tn, NewMockTaskExecutor(tn))
 	}
 
-	w := db.NewDBWorker("test_group")
+	w := core.NewWorkerExecutor(db.NewDBWorker("load_balance"))
 	w.Start()
 	time.Sleep(1000 * time.Second)
 

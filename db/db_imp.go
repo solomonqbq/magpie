@@ -6,6 +6,7 @@ import (
 	"github.com/xeniumd-china/magpie/core"
 	"github.com/xeniumd-china/magpie/db/model"
 	"github.com/xeniumd-china/magpie/global"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -86,18 +87,66 @@ func HeartBeat(w *core.Worker) func() error {
 func Cleanup(w *core.Worker) func(group string) {
 	return func(group string) {
 		//清理超时worker
-		workersId, err := QueryTimeoutWorker()
-		if workersId == nil || len(workersId) == 0 {
-			log.Debug("清理完成..")
-			return
+		go clean_timeout_workers()
+
+		//清理超时任务
+		go clean_timeout_tasks(w)
+	}
+}
+
+func clean_timeout_workers() {
+	defer func() {
+		if err := recover(); err != nil {
+			debug.PrintStack()
+			log.Error(err)
 		}
-		//清理worker
-		count, err := DeleteTimeoutWorker(workersId)
-		if err != nil {
-			log.Error("清除超时worker出错！%s", err)
+	}()
+	//清理超时worker
+	workersId, err := QueryTimeoutWorker()
+	if workersId == nil || len(workersId) == 0 {
+		log.Debug("清理timeout workers完成..")
+		return
+	}
+	//清理worker
+	count, err := DeleteTimeoutWorker(workersId)
+	if err != nil {
+		log.Error("清除超时worker出错！%s", err)
+	}
+	if count != 0 {
+		log.Info("清除%d个超时worker", count)
+	}
+}
+
+//清理无主任务
+func clean_timeout_tasks(w *core.Worker) {
+	defer func() {
+		if err := recover(); err != nil {
+			debug.PrintStack()
+			log.Error(err)
 		}
-		if count != 0 {
-			log.Info("清除%d个超时worker", count)
+	}()
+	workerIds, _, err := QueryActiveTasks()
+	if err != nil {
+		log.Error("查询active task出错！%s", err)
+		return
+	}
+	active_workerIds, err := QueryActiveWorkers(w.Group)
+	if err != nil {
+		log.Error("查询active workers出错！%s", err)
+		return
+	}
+	active_workerIds_map := make(map[int64]interface{})
+	for _, id := range active_workerIds {
+		active_workerIds_map[id] = id
+	}
+	for _, id := range workerIds {
+		if _, ok := active_workerIds_map[id]; !ok {
+			//清除任务属主，让任务可再被分配
+			log.Debug("释放worker_id:%d的所有任务", id)
+			err := UpdateTaskStatusByWorkerID(id, core.TASK_NEW)
+			if err != nil {
+				log.Error("更新任务状态失败%s,", err)
+			}
 		}
 	}
 }
@@ -203,10 +252,14 @@ func NewDBWorker(group string) *core.Worker {
 	}
 
 	//加载所有存活的用户
-	w.LoadActiveWorkers = func(group string) (ids []string, err error) {
-		ids, err = QueryActiveWorkers(group)
+	w.LoadActiveWorkers = func(group string) (str_ids []string, err error) {
+		ids, err := QueryActiveWorkers(group)
 		if err != nil {
 			return nil, err
+		}
+		str_ids = make([]string, 0)
+		for _, id := range ids {
+			str_ids = append(str_ids, strconv.FormatInt(id, 10))
 		}
 		return
 	}

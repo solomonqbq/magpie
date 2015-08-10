@@ -23,7 +23,8 @@ func initGroup() {
 
 func TestDBBoard(t *testing.T) {
 	initGroup()
-	b := core.NewWorkerExecutor(NewDBWorker())
+	b := core.NewWorkerExecutor(NewDBWorker("load_balance"))
+
 	b.Start()
 	//	b.Init()
 	//	groups, err := b.LoadAllGroup()
